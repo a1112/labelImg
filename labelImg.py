@@ -9,20 +9,9 @@ import sys
 import webbrowser as wb
 from functools import partial
 
-try:
-    from PyQt5.QtGui import *
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import *
-except ImportError:
-    # needed for py3+qt4
-    # Ref:
-    # http://pyqt.sourceforge.net/Docs/PyQt4/incompatible_apis.html
-    # http://stackoverflow.com/questions/21217399/pyqt4-qtcore-qvariant-object-instead-of-a-string
-    if sys.version_info.major >= 3:
-        import sip
-        sip.setapi('QVariant', 2)
-    from PyQt4.QtGui import *
-    from PyQt4.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtCore import *
+from PySide6.QtWidgets import *
 
 from libs.combobox import ComboBox
 from libs.default_label_combobox import DefaultLabelComboBox
@@ -31,7 +20,7 @@ from libs.constants import *
 from libs.utils import *
 from libs.settings import Settings
 from libs.shape import Shape, DEFAULT_LINE_COLOR, DEFAULT_FILL_COLOR
-from libs.stringBundle import StringBundle
+from libs.stringBundle import StringBundle, LANGUAGES
 from libs.canvas import Canvas
 from libs.zoomWidget import ZoomWidget
 from libs.lightWidget import LightWidget
@@ -85,7 +74,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.os_name = platform.system()
 
         # Load string bundle for i18n
-        self.string_bundle = StringBundle.get_bundle()
+        saved_lang = settings.get(SETTING_LANGUAGE, None)
+        self.string_bundle = StringBundle.get_bundle(saved_lang)
         get_str = lambda str_id: self.string_bundle.get_string(str_id)
 
         # Save as Pascal voc xml
@@ -379,6 +369,24 @@ class MainWindow(QMainWindow, WindowMixin):
         self.draw_squares_option.setChecked(settings.get(SETTING_DRAW_SQUARE, False))
         self.draw_squares_option.triggered.connect(self.toggle_draw_square)
 
+        # Language menu
+        self.language_menu = QMenu('Language', self)
+        self.language_group = QActionGroup(self)
+        saved_lang = settings.get(SETTING_LANGUAGE, '')
+        for lang_code, lang_name in LANGUAGES.items():
+            lang_action = QAction(lang_name, self)
+            lang_action.setData(lang_code)
+            lang_action.setCheckable(True)
+            lang_action.triggered.connect(partial(self.change_language, lang_code))
+            if lang_code == saved_lang or (not saved_lang and lang_code == 'en'):
+                lang_action.setChecked(True)
+            self.language_group.addAction(lang_action)
+            self.language_menu.addAction(lang_action)
+        if not saved_lang:
+            for a in self.language_menu.actions():
+                if a.data() == 'en':
+                    a.setChecked(True)
+
         # Store actions for further handling.
         self.actions = Struct(save=save, save_format=save_format, saveAs=save_as, open=open, close=close, resetAll=reset_all, deleteImg=delete_image,
                               lineColor=color1, create=create, delete=delete, edit=edit, copy=copy,
@@ -437,7 +445,8 @@ class MainWindow(QMainWindow, WindowMixin):
             hide_all, show_all, None,
             zoom_in, zoom_out, zoom_org, None,
             fit_window, fit_width, None,
-            light_brighten, light_darken, light_org))
+            light_brighten, light_darken, light_org, None,
+            self.language_menu))
 
         self.menus.file.aboutToShow.connect(self.update_file_menu)
 
@@ -486,8 +495,10 @@ class MainWindow(QMainWindow, WindowMixin):
         position = QPoint(0, 0)
         saved_position = settings.get(SETTING_WIN_POSE, position)
         # Fix the multiple monitors issue
-        for i in range(QApplication.desktop().screenCount()):
-            if QApplication.desktop().availableGeometry(i).contains(saved_position):
+        from PySide6.QtGui import QGuiApplication
+        screens = QGuiApplication.screens()
+        for screen in screens:
+            if screen.availableGeometry().contains(saved_position):
                 position = saved_position
                 break
         self.resize(size)
@@ -508,8 +519,6 @@ class MainWindow(QMainWindow, WindowMixin):
         Shape.difficult = self.difficult
 
         def xbool(x):
-            if isinstance(x, QVariant):
-                return x.toBool()
             return bool(x)
 
         if xbool(settings.get(SETTING_ADVANCE_MODE, False)):
@@ -1493,7 +1502,7 @@ class MainWindow(QMainWindow, WindowMixin):
         filename_without_extension = os.path.splitext(self.file_path)[0]
         dlg.selectFile(filename_without_extension)
         dlg.setOption(QFileDialog.DontUseNativeDialog, False)
-        if dlg.exec_():
+        if dlg.exec():
             full_file_path = ustr(dlg.selectedFiles()[0])
             if remove_ext:
                 return os.path.splitext(full_file_path)[0]  # Return file path without the extension.
@@ -1669,6 +1678,14 @@ class MainWindow(QMainWindow, WindowMixin):
     def toggle_draw_square(self):
         self.canvas.set_drawing_shape_to_square(self.draw_squares_option.isChecked())
 
+    def change_language(self, lang_code, checked):
+        if not checked:
+            return
+        self.settings[SETTING_LANGUAGE] = lang_code
+        self.settings.save()
+        QMessageBox.information(self, 'Language',
+            'Language will change after restart.\n语言将在重启后生效。')
+
 def inverted(color):
     return QColor(*[255 - v for v in color.getRgb()])
 
@@ -1715,8 +1732,19 @@ def get_main_app(argv=None):
 
 def main():
     """construct main app and run it"""
-    app, _win = get_main_app(sys.argv)
-    return app.exec_()
+    import sys
+    print("[DEBUG] Starting main()...", flush=True)
+    try:
+        print("[DEBUG] Creating app and window...", flush=True)
+        app, _win = get_main_app(sys.argv)
+        print("[DEBUG] Window created, starting event loop...", flush=True)
+        return app.exec()
+    except Exception as e:
+        import traceback
+        print("[ERROR] Exception in main:", flush=True)
+        traceback.print_exc()
+        input("Press Enter to exit...")
+        return 1
 
 if __name__ == '__main__':
     sys.exit(main())

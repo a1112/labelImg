@@ -1,10 +1,6 @@
-try:
-    from PyQt5.QtGui import *
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import QColorDialog, QDialogButtonBox
-except ImportError:
-    from PyQt4.QtGui import *
-    from PyQt4.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtCore import *
+from PySide6.QtWidgets import QColorDialog, QDialogButtonBox
 
 BB = QDialogButtonBox
 
@@ -30,7 +26,7 @@ class ColorDialog(QColorDialog):
             self.setWindowTitle(title)
         if value:
             self.setCurrentColor(value)
-        return self.currentColor() if self.exec_() else None
+        return self.currentColor() if self.exec() else None
 
     def check_restore(self, button):
         if self.bb.buttonRole(button) & BB.ResetRole and self.default:

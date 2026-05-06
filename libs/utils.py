@@ -3,20 +3,23 @@ from libs.ustr import ustr
 import hashlib
 import re
 import sys
+import os
 
-try:
-    from PyQt5.QtGui import *
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import *
-    QT5 = True
-except ImportError:
-    from PyQt4.QtGui import *
-    from PyQt4.QtCore import *
-    QT5 = False
+from PySide6.QtGui import *
+from PySide6.QtCore import *
+from PySide6.QtWidgets import *
 
+
+# Get resources directory
+_resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources')
 
 def new_icon(icon):
-    return QIcon(':/' + icon)
+    """Load icon from filesystem instead of Qt resources"""
+    icon_path = os.path.join(_resources_dir, 'icons', icon + '.png')
+    if os.path.exists(icon_path):
+        return QIcon(icon_path)
+    # Fallback to empty icon or Qt resources
+    return QIcon()
 
 
 def new_button(text, icon=None, slot=None):
@@ -61,7 +64,9 @@ def add_actions(widget, actions):
 
 
 def label_validator():
-    return QRegExpValidator(QRegExp(r'^[^ \t].+'), None)
+    from PySide6.QtCore import QRegularExpression
+    from PySide6.QtGui import QRegularExpressionValidator
+    return QRegularExpressionValidator(QRegularExpression(r'^[^ \t].+'), None)
 
 
 class Struct(object):
@@ -89,12 +94,12 @@ def generate_color_by_text(text):
 
 
 def have_qstring():
-    """p3/qt5 get rid of QString wrapper as py3 has native unicode str type"""
-    return not (sys.version_info.major >= 3 or QT_VERSION_STR.startswith('5.'))
+    """PySide6/Python 3 has no QString wrapper - native unicode str type"""
+    return False
 
 
 def util_qt_strlistclass():
-    return QStringList if have_qstring() else list
+    return list
 
 
 def natural_sort(list, key=lambda s:s):
@@ -108,10 +113,5 @@ def natural_sort(list, key=lambda s:s):
     list.sort(key=sort_key)
 
 
-# QT4 has a trimmed method, in QT5 this is called strip
-if QT5:
-    def trimmed(text):
-        return text.strip()
-else:
-    def trimmed(text):
-        return text.trimmed()
+def trimmed(text):
+    return text.strip()

@@ -1,23 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-if items were added in files in the resources/strings folder,
-then execute "pyrcc5 resources.qrc -o resources.py" in the root directory
-and execute "pyrcc5 ../resources.qrc -o resources.py" in the libs directory
-"""
 import re
 import os
 import sys
 import locale
 from libs.ustr import ustr
 
-try:
-    from PyQt5.QtCore import *
-except ImportError:
-    if sys.version_info.major >= 3:
-        import sip
-        sip.setapi('QVariant', 2)
-    from PyQt4.QtCore import *
+from PySide6.QtCore import *
+from PySide6.QtCore import QStringConverter
+
+
+LANGUAGES = {
+    'en': 'English',
+    'zh-CN': '简体中文',
+    'zh-TW': '繁體中文',
+    'ja-JP': '日本語',
+}
 
 
 class StringBundle:
@@ -35,8 +33,8 @@ class StringBundle:
     def get_bundle(cls, locale_str=None):
         if locale_str is None:
             try:
-                locale_str = locale.getdefaultlocale()[0] if locale.getdefaultlocale() and len(
-                    locale.getdefaultlocale()) > 0 else os.getenv('LANG')
+                default_locale = locale.getlocale()
+                locale_str = default_locale[0] if default_locale and default_locale[0] else os.getenv('LANG')
             except:
                 print('Invalid locale')
                 locale_str = 'en'
@@ -49,30 +47,48 @@ class StringBundle:
 
     def __create_lookup_fallback_list(self, locale_str):
         result_paths = []
-        base_path = ":/strings"
+        # Use filesystem path instead of Qt resources
+        base_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'strings', 'strings.properties')
         result_paths.append(base_path)
         if locale_str is not None:
-            # Don't follow standard BCP47. Simple fallback
+            # Try the full locale first (e.g. zh-CN)
+            dir_path = os.path.dirname(result_paths[-1])
+            result_paths.append(os.path.join(dir_path, 'strings-' + locale_str + '.properties'))
+            # Then try individual tags as fallback
             tags = re.split('[^a-zA-Z]', locale_str)
             for tag in tags:
-                last_path = result_paths[-1]
-                result_paths.append(last_path + '-' + tag)
+                dir_path = os.path.dirname(os.path.dirname(result_paths[-1]))
+                result_paths.append(os.path.join(dir_path, 'strings', 'strings-' + tag + '.properties'))
 
         return result_paths
 
     def __load_bundle(self, path):
         PROP_SEPERATOR = '='
-        f = QFile(path)
-        if f.exists():
-            if f.open(QIODevice.ReadOnly | QFile.Text):
-                text = QTextStream(f)
-                text.setCodec("UTF-8")
+        # Try filesystem first, fall back to Qt resources
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if PROP_SEPERATOR in line:
+                        key_value = line.split(PROP_SEPERATOR, 1)
+                        key = key_value[0].strip()
+                        value = key_value[1].strip().strip('"')
+                        self.id_to_message[key] = value
+        else:
+            # Fall back to Qt resources
+            f = QFile(path)
+            if f.exists():
+                if f.open(QIODevice.ReadOnly | QFile.Text):
+                    text = QTextStream(f)
+                    text.setEncoding(QStringConverter.Utf8)
 
-            while not text.atEnd():
-                line = ustr(text.readLine())
-                key_value = line.split(PROP_SEPERATOR)
-                key = key_value[0].strip()
-                value = PROP_SEPERATOR.join(key_value[1:]).strip().strip('"')
-                self.id_to_message[key] = value
+                while not text.atEnd():
+                    line = ustr(text.readLine())
+                    key_value = line.split(PROP_SEPERATOR)
+                    key = key_value[0].strip()
+                    value = PROP_SEPERATOR.join(key_value[1:]).strip().strip('"')
+                    self.id_to_message[key] = value
 
-            f.close()
+                f.close()

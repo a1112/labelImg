@@ -1,13 +1,8 @@
 
-try:
-    from PyQt5.QtGui import *
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import *
-except ImportError:
-    from PyQt4.QtGui import *
-    from PyQt4.QtCore import *
-
-# from PyQt4.QtOpenGL import *
+from PySide6.QtGui import *
+from PySide6.QtCore import *
+from PySide6.QtWidgets import *
+from PySide6.QtCore import Signal
 
 from libs.shape import Shape
 from libs.utils import distance
@@ -22,13 +17,13 @@ CURSOR_GRAB = Qt.OpenHandCursor
 
 
 class Canvas(QWidget):
-    zoomRequest = pyqtSignal(int)
-    lightRequest = pyqtSignal(int)
-    scrollRequest = pyqtSignal(int, int)
-    newShape = pyqtSignal()
-    selectionChanged = pyqtSignal(bool)
-    shapeMoved = pyqtSignal()
-    drawingPolygon = pyqtSignal(bool)
+    zoomRequest = Signal(int)
+    lightRequest = Signal(int)
+    scrollRequest = Signal(int, int)
+    newShape = Signal()
+    selectionChanged = Signal(bool)
+    shapeMoved = Signal()
+    drawingPolygon = Signal(bool)
 
     CREATE, EDIT = list(range(2))
 
@@ -279,7 +274,7 @@ class Canvas(QWidget):
         if ev.button() == Qt.RightButton:
             menu = self.menus[bool(self.selected_shape_copy)]
             self.restore_cursor()
-            if not menu.exec_(self.mapToGlobal(ev.pos()))\
+            if not menu.exec(self.mapToGlobal(ev.pos()))\
                and self.selected_shape_copy:
                 # Cancel the move by deleting the shadow copy.
                 self.selected_shape_copy = None
@@ -499,7 +494,6 @@ class Canvas(QWidget):
         p = self._painter
         p.begin(self)
         p.setRenderHint(QPainter.Antialiasing)
-        p.setRenderHint(QPainter.HighQualityAntialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
 
         p.scale(self.scale, self.scale)
@@ -556,7 +550,8 @@ class Canvas(QWidget):
 
     def transform_pos(self, point):
         """Convert from widget-logical coordinates to painter-logical coordinates."""
-        return point / self.scale - self.offset_to_center()
+        offset = self.offset_to_center()
+        return QPointF(point.x() / self.scale - offset.x(), point.y() / self.scale - offset.y())
 
     def offset_to_center(self):
         s = self.scale
@@ -603,26 +598,16 @@ class Canvas(QWidget):
         return super(Canvas, self).minimumSizeHint()
 
     def wheelEvent(self, ev):
-        qt_version = 4 if hasattr(ev, "delta") else 5
-        if qt_version == 4:
-            if ev.orientation() == Qt.Vertical:
-                v_delta = ev.delta()
-                h_delta = 0
-            else:
-                h_delta = ev.delta()
-                v_delta = 0
-        else:
-            delta = ev.angleDelta()
-            h_delta = delta.x()
-            v_delta = delta.y()
+        delta = ev.angleDelta()
+        h_delta = delta.x()
+        v_delta = delta.y()
 
         mods = ev.modifiers()
-        if int(Qt.ControlModifier) | int(Qt.ShiftModifier) == int(mods) and v_delta:
+        if mods == (Qt.ControlModifier | Qt.ShiftModifier) and v_delta:
             self.lightRequest.emit(v_delta)
-        elif Qt.ControlModifier == int(mods) and v_delta:
+        elif v_delta:
             self.zoomRequest.emit(v_delta)
         else:
-            v_delta and self.scrollRequest.emit(v_delta, Qt.Vertical)
             h_delta and self.scrollRequest.emit(h_delta, Qt.Horizontal)
         ev.accept()
 

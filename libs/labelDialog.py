@@ -1,10 +1,6 @@
-try:
-    from PyQt5.QtGui import *
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import *
-except ImportError:
-    from PyQt4.QtGui import *
-    from PyQt4.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtCore import *
+from PySide6.QtWidgets import *
 
 from libs.utils import new_icon, label_validator, trimmed
 
@@ -34,7 +30,7 @@ class LabelDialog(QDialog):
         bb.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
-        layout.addWidget(bb, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(bb, alignment=Qt.AlignmentFlag.AlignLeft if hasattr(Qt, 'AlignmentFlag') else Qt.AlignLeft)
         layout.addWidget(self.edit)
 
         if list_item is not None and len(list_item) > 0:
@@ -84,7 +80,7 @@ class LabelDialog(QDialog):
             if cursor_pos.y() > max_global.y():
                 cursor_pos.setY(max_global.y())
             self.move(cursor_pos)
-        return trimmed(self.edit.text()) if self.exec_() else None
+        return trimmed(self.edit.text()) if self.exec() else None
 
     def list_item_click(self, t_qlist_widget_item):
         text = trimmed(t_qlist_widget_item.text())
