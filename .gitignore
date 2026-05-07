@@ -41,3 +41,29 @@ __pycache__/
 .unison*
 .attach*
 tmp.*
+
+# Virtual Environment
+venv/
+
+# Claude Code
+.claude/
+
+# Debug/temp scripts
+debug_run.bat
+debug_run.py
+direct_run.bat
+check_python.bat
+find_py.bat
+find_python.bat
+launcher.bat
+run_and_log.bat
+run_and_save.bat
+run_py.bat
+run_with_trace.bat
+run_with_trace.py
+test.py
+test_log.py
+test_run.bat
+
+# Log files
+ps_run_log.txt
