@@ -397,6 +397,11 @@ class MainWindow(QMainWindow, WindowMixin):
                               zoomActions=zoom_actions,
                               lightBrighten=light_brighten, lightDarken=light_darken, lightOrg=light_org,
                               lightActions=light_actions,
+                              quit=quit, openDir=open_dir, changeSaveDir=change_save_dir,
+                              openAnnotation=open_annotation, copyPrevBounding=copy_prev_bounding,
+                              nextImg=open_next_image, prevImg=open_prev_image, verify=verify,
+                              hideAll=hide_all, showAll=show_all,
+                              helpDefault=help_default, showInfo=show_info, showShortcut=show_shortcut,
                               fileMenuActions=(
                                   open, open_dir, save, save_as, close, reset_all, quit),
                               beginner=(), advanced=(),
@@ -1683,8 +1688,81 @@ class MainWindow(QMainWindow, WindowMixin):
             return
         self.settings[SETTING_LANGUAGE] = lang_code
         self.settings.save()
-        QMessageBox.information(self, 'Language',
-            'Language will change after restart.\n语言将在重启后生效。')
+        self.string_bundle = StringBundle.get_bundle(lang_code)
+        self.update_ui_language()
+
+    def update_ui_language(self):
+        get_str = lambda str_id: self.string_bundle.get_string(str_id)
+        a = self.actions
+
+        # Action text/tip mappings: (action, text_key, tip_key)
+        action_map = [
+            (a.open, 'openFile', 'openFileDetail'),
+            (a.save, 'save', 'saveDetail'),
+            (a.saveAs, 'saveAs', 'saveAsDetail'),
+            (a.close, 'closeCur', 'closeCurDetail'),
+            (a.resetAll, 'resetAll', 'resetAllDetail'),
+            (a.deleteImg, 'deleteImg', 'deleteImgDetail'),
+            (a.lineColor, 'boxLineColor', 'boxLineColorDetail'),
+            (a.create, 'crtBox', 'crtBoxDetail'),
+            (a.delete, 'delBox', 'delBoxDetail'),
+            (a.copy, 'dupBox', 'dupBoxDetail'),
+            (a.edit, 'editLabel', 'editLabelDetail'),
+            (a.createMode, 'crtBox', 'crtBoxDetail'),
+            (a.editMode, 'editBox', 'editBoxDetail'),
+            (a.advancedMode, 'advancedMode', 'advancedModeDetail'),
+            (a.shapeLineColor, 'shapeLineColor', 'shapeLineColorDetail'),
+            (a.shapeFillColor, 'shapeFillColor', 'shapeFillColorDetail'),
+            (a.zoomIn, 'zoomin', 'zoominDetail'),
+            (a.zoomOut, 'zoomout', 'zoomoutDetail'),
+            (a.zoomOrg, 'originalsize', 'originalsizeDetail'),
+            (a.fitWindow, 'fitWin', 'fitWinDetail'),
+            (a.fitWidth, 'fitWidth', 'fitWidthDetail'),
+            (a.lightBrighten, 'lightbrighten', 'lightbrightenDetail'),
+            (a.lightDarken, 'lightdarken', 'lightdarkenDetail'),
+            (a.lightOrg, 'lightreset', 'lightresetDetail'),
+            (a.quit, 'quit', 'quitApp'),
+            (a.openDir, 'openDir', 'openDir'),
+            (a.changeSaveDir, 'changeSaveDir', 'changeSavedAnnotationDir'),
+            (a.openAnnotation, 'openAnnotation', 'openAnnotationDetail'),
+            (a.copyPrevBounding, 'copyPrevBounding', 'copyPrevBounding'),
+            (a.nextImg, 'nextImg', 'nextImgDetail'),
+            (a.prevImg, 'prevImg', 'prevImgDetail'),
+            (a.verify, 'verifyImg', 'verifyImgDetail'),
+            (a.hideAll, 'hideAllBox', 'hideAllBoxDetail'),
+            (a.showAll, 'showAllBox', 'showAllBoxDetail'),
+            (a.helpDefault, 'tutorialDefault', 'tutorialDetail'),
+            (a.showInfo, 'info', 'info'),
+            (a.showShortcut, 'shortcut', 'shortcut'),
+        ]
+        for action, text_key, tip_key in action_map:
+            action.setText(get_str(text_key))
+            action.setToolTip(get_str(tip_key))
+            action.setStatusTip(get_str(tip_key))
+
+        # Menu titles
+        self.menus.file.setTitle(get_str('menu_file'))
+        self.menus.edit.setTitle(get_str('menu_edit'))
+        self.menus.view.setTitle(get_str('menu_view'))
+        self.menus.help.setTitle(get_str('menu_help'))
+        self.menus.recentFiles.setTitle(get_str('menu_openRecent'))
+
+        # Dock widgets
+        self.dock.setWindowTitle(get_str('boxLabelText'))
+        self.file_dock.setWindowTitle(get_str('fileList'))
+
+        # Widgets
+        self.use_default_label_checkbox.setText(get_str('useDefaultLabel'))
+        self.diffc_button.setText(get_str('useDifficult'))
+        self.auto_saving.setText(get_str('autoSaveMode'))
+        self.single_class_mode.setText(get_str('singleClsMode'))
+        self.display_label_option.setText(get_str('displayLabel'))
+        self.draw_squares_option.setText(get_str('drawSquares'))
+        self.light_widget.setWindowTitle(get_str('lightWidgetTitle'))
+        self.dock.toggleViewAction().setText(get_str('showHide'))
+
+        # Language menu title
+        self.language_menu.setTitle(get_str('language'))
 
 def inverted(color):
     return QColor(*[255 - v for v in color.getRgb()])
