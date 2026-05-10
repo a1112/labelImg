@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
-import time
+import tempfile
 import unittest
 
 __author__ = 'TzuTaLin'
@@ -15,6 +15,9 @@ class TestSettings(unittest.TestCase):
 
     def test_basic(self):
         settings = Settings()
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        settings.path = os.path.join(temp_dir.name, '.labelImgSettings.pkl')
         settings['test0'] = 'hello'
         settings['test1'] = 10
         settings['test2'] = [0, 2, 3]

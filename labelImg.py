@@ -20,7 +20,7 @@ from libs.constants import *
 from libs.utils import *
 from libs.settings import Settings
 from libs.shape import Shape, DEFAULT_LINE_COLOR, DEFAULT_FILL_COLOR
-from libs.stringBundle import StringBundle, LANGUAGES
+from libs.stringBundle import StringBundle, LANGUAGES, get_system_language, normalize_language
 from libs.canvas import Canvas
 from libs.zoomWidget import ZoomWidget
 from libs.lightWidget import LightWidget
@@ -75,7 +75,11 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Load string bundle for i18n
         saved_lang = settings.get(SETTING_LANGUAGE, None)
-        self.string_bundle = StringBundle.get_bundle(saved_lang)
+        self.current_language = normalize_language(saved_lang) if saved_lang else get_system_language()
+        if not saved_lang:
+            settings[SETTING_LANGUAGE] = self.current_language
+            settings.save()
+        self.string_bundle = StringBundle.get_bundle(self.current_language)
         get_str = lambda str_id: self.string_bundle.get_string(str_id)
 
         # Save as Pascal voc xml
@@ -160,6 +164,9 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dock.setWidget(label_list_container)
 
         self.file_list_widget = QListWidget()
+        file_list_font = self.file_list_widget.font()
+        file_list_font.setPointSize(max(file_list_font.pointSize(), 11))
+        self.file_list_widget.setFont(file_list_font)
         self.file_list_widget.itemDoubleClicked.connect(self.file_item_double_clicked)
         file_list_layout = QVBoxLayout()
         file_list_layout.setContentsMargins(0, 0, 0, 0)
@@ -372,20 +379,16 @@ class MainWindow(QMainWindow, WindowMixin):
         # Language menu
         self.language_menu = QMenu('Language', self)
         self.language_group = QActionGroup(self)
-        saved_lang = settings.get(SETTING_LANGUAGE, '')
+        saved_lang = self.current_language
         for lang_code, lang_name in LANGUAGES.items():
             lang_action = QAction(lang_name, self)
             lang_action.setData(lang_code)
             lang_action.setCheckable(True)
             lang_action.triggered.connect(partial(self.change_language, lang_code))
-            if lang_code == saved_lang or (not saved_lang and lang_code == 'en'):
+            if lang_code == saved_lang:
                 lang_action.setChecked(True)
             self.language_group.addAction(lang_action)
             self.language_menu.addAction(lang_action)
-        if not saved_lang:
-            for a in self.language_menu.actions():
-                if a.data() == 'en':
-                    a.setChecked(True)
 
         # Store actions for further handling.
         self.actions = Struct(save=save, save_format=save_format, saveAs=save_as, open=open, close=close, resetAll=reset_all, deleteImg=delete_image,
@@ -552,6 +555,7 @@ class MainWindow(QMainWindow, WindowMixin):
         # Open Dir if default file
         if self.file_path and os.path.isdir(self.file_path):
             self.open_dir_dialog(dir_path=self.file_path, silent=True)
+        QApplication.instance().installEventFilter(self)
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -561,6 +565,30 @@ class MainWindow(QMainWindow, WindowMixin):
         if event.key() == Qt.Key_Control:
             # Draw rectangle if Ctrl is pressed
             self.canvas.set_drawing_shape_to_square(True)
+        elif event.modifiers() == Qt.NoModifier and self.handle_shape_shortcut_key(event.key()):
+            event.accept()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress and event.modifiers() == Qt.NoModifier:
+            if isinstance(obj, QWidget) and (obj is self or self.isAncestorOf(obj)):
+                if self.handle_shape_shortcut_key(event.key()):
+                    return True
+        return super(MainWindow, self).eventFilter(obj, event)
+
+    def handle_shape_shortcut_key(self, key):
+        if key == Qt.Key_Z:
+            self.select_adjacent_label(-1)
+            return True
+        if key == Qt.Key_C:
+            self.select_adjacent_label(1)
+            return True
+        if key == Qt.Key_S:
+            self.delete_selected_shape()
+            return True
+        if key == Qt.Key_Q:
+            self.delete_all_shapes()
+            return True
+        return False
 
     # Support Functions #
     def set_format(self, save_format):
@@ -669,7 +697,7 @@ class MainWindow(QMainWindow, WindowMixin):
         items = self.label_list.selectedItems()
         if items:
             return items[0]
-        return None
+        return self.label_list.currentItem()
 
     def add_recent_file(self, file_path):
         if file_path in self.recent_files:
@@ -677,6 +705,16 @@ class MainWindow(QMainWindow, WindowMixin):
         elif len(self.recent_files) >= self.max_recent:
             self.recent_files.pop()
         self.recent_files.insert(0, file_path)
+
+    def select_file_item(self, file_path):
+        if not file_path or self.file_list_widget.count() == 0:
+            return
+        if file_path in self.m_img_list:
+            index = self.m_img_list.index(file_path)
+            file_widget_item = self.file_list_widget.item(index)
+            self.file_list_widget.setCurrentItem(file_widget_item)
+            file_widget_item.setSelected(True)
+            self.file_list_widget.scrollToItem(file_widget_item)
 
     def beginner(self):
         return self._beginner
@@ -817,7 +855,10 @@ class MainWindow(QMainWindow, WindowMixin):
         else:
             shape = self.canvas.selected_shape
             if shape:
-                self.shapes_to_items[shape].setSelected(True)
+                item = self.shapes_to_items.get(shape)
+                if item:
+                    self._no_selection_slot = True
+                    self.label_list.setCurrentItem(item, QItemSelectionModel.ClearAndSelect)
             else:
                 self.label_list.clearSelection()
         self.actions.delete.setEnabled(selected)
@@ -825,6 +866,33 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.edit.setEnabled(selected)
         self.actions.shapeLineColor.setEnabled(selected)
         self.actions.shapeFillColor.setEnabled(selected)
+
+    def select_label_row(self, row):
+        if self.label_list.count() == 0:
+            self.label_list.clearSelection()
+            return
+        row = max(0, min(row, self.label_list.count() - 1))
+        item = self.label_list.item(row)
+        self.label_list.clearSelection()
+        self.label_list.setCurrentRow(row, QItemSelectionModel.ClearAndSelect)
+        item.setSelected(True)
+        if item in self.items_to_shapes:
+            self.canvas.select_shape(self.items_to_shapes[item])
+
+    def select_adjacent_label(self, step):
+        count = self.label_list.count()
+        if count == 0:
+            return
+        selected_items = self.label_list.selectedItems()
+        item = selected_items[0] if selected_items else self.label_list.currentItem()
+        if item is None:
+            self.select_label_row(0)
+            return
+        row = self.label_list.row(item)
+        if row < 0:
+            self.select_label_row(0)
+            return
+        self.select_label_row((row + step) % count)
 
     def add_label(self, shape):
         shape.paint_label = self.display_label_option.isChecked()
@@ -838,16 +906,44 @@ class MainWindow(QMainWindow, WindowMixin):
         for action in self.actions.onShapesPresent:
             action.setEnabled(True)
         self.update_combo_box()
+        self.label_list.setCurrentItem(item, QItemSelectionModel.ClearAndSelect)
 
     def remove_label(self, shape):
         if shape is None:
             # print('rm empty label')
             return
         item = self.shapes_to_items[shape]
-        self.label_list.takeItem(self.label_list.row(item))
+        row = self.label_list.row(item)
+        self.label_list.takeItem(row)
         del self.shapes_to_items[shape]
         del self.items_to_shapes[item]
         self.update_combo_box()
+        if self.label_list.count():
+            self.select_label_row(row if row < self.label_list.count() else self.label_list.count() - 1)
+        else:
+            self.label_list.clearSelection()
+
+    def delete_all_shapes(self):
+        if not self.canvas.shapes and self.label_list.count() == 0:
+            return
+
+        self.canvas.de_select_shape()
+        self.canvas.un_highlight()
+        self.canvas.shapes.clear()
+        self.canvas.selected_shape_copy = None
+        self.canvas.update()
+
+        self.label_list.blockSignals(True)
+        self.label_list.clear()
+        self.label_list.blockSignals(False)
+
+        self.items_to_shapes.clear()
+        self.shapes_to_items.clear()
+        self.update_combo_box()
+        self.set_dirty()
+
+        for action in self.actions.onShapesPresent:
+            action.setEnabled(False)
 
     def load_labels(self, shapes):
         s = []
@@ -940,18 +1036,18 @@ class MainWindow(QMainWindow, WindowMixin):
         text = self.combo_box.cb.itemText(index)
         for i in range(self.label_list.count()):
             if text == "":
-                self.label_list.item(i).setCheckState(2)
+                self.label_list.item(i).setCheckState(Qt.Checked)
             elif text != self.label_list.item(i).text():
-                self.label_list.item(i).setCheckState(0)
+                self.label_list.item(i).setCheckState(Qt.Unchecked)
             else:
-                self.label_list.item(i).setCheckState(2)
+                self.label_list.item(i).setCheckState(Qt.Checked)
 
     def default_label_combo_selection_changed(self, index):
         self.default_label=self.label_hist[index]
 
     def label_selection_changed(self):
         item = self.current_item()
-        if item and self.canvas.editing():
+        if item and self.canvas.editing() and item in self.items_to_shapes:
             self._no_selection_slot = True
             self.canvas.select_shape(self.items_to_shapes[item])
             shape = self.items_to_shapes[item]
@@ -1091,13 +1187,13 @@ class MainWindow(QMainWindow, WindowMixin):
         self.zoom_mode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
         self.adjust_scale()
 
-    def set_light(self, value):
+    def set_light(self, value, *args):
         self.actions.lightOrg.setChecked(int(value) == 50)
         # Arithmetic on scaling factor often results in float
         # Convert to int to avoid type errors
         self.light_widget.setValue(int(value))
 
-    def add_light(self, increment=10):
+    def add_light(self, increment=10, *args):
         self.set_light(self.light_widget.value() + increment)
 
     def toggle_polygons(self, value):
@@ -1120,9 +1216,7 @@ class MainWindow(QMainWindow, WindowMixin):
         # Highlight the file item
         if unicode_file_path and self.file_list_widget.count() > 0:
             if unicode_file_path in self.m_img_list:
-                index = self.m_img_list.index(unicode_file_path)
-                file_widget_item = self.file_list_widget.item(index)
-                file_widget_item.setSelected(True)
+                self.select_file_item(unicode_file_path)
             else:
                 self.file_list_widget.clear()
                 self.m_img_list.clear()
@@ -1178,10 +1272,9 @@ class MainWindow(QMainWindow, WindowMixin):
 
             # Default : select last item if there is at least one item
             if self.label_list.count():
-                self.label_list.setCurrentItem(self.label_list.item(self.label_list.count() - 1))
-                self.label_list.item(self.label_list.count() - 1).setSelected(True)
+                self.select_label_row(0)
 
-            self.canvas.setFocus(True)
+            self.canvas.setFocus()
             return True
         return False
 
@@ -1389,6 +1482,8 @@ class MainWindow(QMainWindow, WindowMixin):
         for imgPath in self.m_img_list:
             item = QListWidgetItem(imgPath)
             self.file_list_widget.addItem(item)
+        if self.file_path:
+            self.select_file_item(self.file_path)
 
     def verify_image(self, _value=False):
         # Proceeding next image without dialog if having any label
@@ -1586,7 +1681,15 @@ class MainWindow(QMainWindow, WindowMixin):
             self.set_dirty()
 
     def delete_selected_shape(self):
-        self.remove_label(self.canvas.delete_selected())
+        shape = self.canvas.delete_selected()
+        if shape is None:
+            item = self.current_item()
+            shape = self.items_to_shapes.get(item)
+            if shape in self.canvas.shapes:
+                self.canvas.shapes.remove(shape)
+                self.canvas.selected_shape = None
+                self.canvas.update()
+        self.remove_label(shape)
         self.set_dirty()
         if self.no_shapes():
             for action in self.actions.onShapesPresent:
@@ -1683,12 +1786,17 @@ class MainWindow(QMainWindow, WindowMixin):
     def toggle_draw_square(self):
         self.canvas.set_drawing_shape_to_square(self.draw_squares_option.isChecked())
 
-    def change_language(self, lang_code, checked):
+    def change_language(self, lang_code, checked=True):
         if not checked:
             return
+        lang_code = normalize_language(lang_code)
+        self.current_language = lang_code
         self.settings[SETTING_LANGUAGE] = lang_code
         self.settings.save()
         self.string_bundle = StringBundle.get_bundle(lang_code)
+        for action in self.language_menu.actions():
+            if action.data() == lang_code:
+                action.setChecked(True)
         self.update_ui_language()
 
     def update_ui_language(self):

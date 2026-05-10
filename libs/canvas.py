@@ -19,7 +19,7 @@ CURSOR_GRAB = Qt.OpenHandCursor
 class Canvas(QWidget):
     zoomRequest = Signal(int)
     lightRequest = Signal(int)
-    scrollRequest = Signal(int, int)
+    scrollRequest = Signal(int, object)
     newShape = Signal()
     selectionChanged = Signal(bool)
     shapeMoved = Signal()
@@ -63,6 +63,8 @@ class Canvas(QWidget):
 
         # initialisation for panning
         self.pan_initial_pos = QPoint()
+        self.right_pan_initial_pos = QPoint()
+        self.right_panning = False
 
     def set_drawing_color(self, qcolor):
         self.drawing_line_color = qcolor
@@ -103,9 +105,15 @@ class Canvas(QWidget):
     def selected_vertex(self):
         return self.h_vertex is not None
 
+    def event_pos(self, ev):
+        if hasattr(ev, 'position'):
+            return ev.position().toPoint()
+        return ev.pos()
+
     def mouseMoveEvent(self, ev):
         """Update line with last point and current coordinates."""
-        pos = self.transform_pos(ev.pos())
+        event_pos = self.event_pos(ev)
+        pos = self.transform_pos(event_pos)
 
         # Update coordinates in status bar if image is opened
         window = self.parent().window()
@@ -159,9 +167,16 @@ class Canvas(QWidget):
             self.repaint()
             return
 
-        # Polygon copy moving.
         if Qt.RightButton & ev.buttons():
-            if self.selected_shape_copy and self.prev_point:
+            delta = event_pos - self.right_pan_initial_pos
+            if self.right_panning or delta.manhattanLength() >= QApplication.startDragDistance():
+                self.right_panning = True
+                self.override_cursor(CURSOR_MOVE)
+                self.scrollRequest.emit(delta.x(), Qt.Horizontal)
+                self.scrollRequest.emit(delta.y(), Qt.Vertical)
+                self.right_pan_initial_pos = event_pos
+                self.update()
+            elif self.selected_shape_copy and self.prev_point:
                 self.override_cursor(CURSOR_MOVE)
                 self.bounded_move_shape(self.selected_shape_copy, pos)
                 self.repaint()
@@ -199,7 +214,7 @@ class Canvas(QWidget):
                         'Width: %d, Height: %d / X: %d; Y: %d' % (current_width, current_height, pos.x(), pos.y()))
             else:
                 # pan
-                delta = ev.pos() - self.pan_initial_pos
+                delta = event_pos - self.pan_initial_pos
                 self.scrollRequest.emit(delta.x(), Qt.Horizontal)
                 self.scrollRequest.emit(delta.y(), Qt.Vertical)
                 self.update()
@@ -251,7 +266,8 @@ class Canvas(QWidget):
             self.override_cursor(CURSOR_DEFAULT)
 
     def mousePressEvent(self, ev):
-        pos = self.transform_pos(ev.pos())
+        event_pos = self.event_pos(ev)
+        pos = self.transform_pos(event_pos)
 
         if ev.button() == Qt.LeftButton:
             if self.drawing():
@@ -263,18 +279,26 @@ class Canvas(QWidget):
                 if selection is None:
                     # pan
                     QApplication.setOverrideCursor(QCursor(Qt.OpenHandCursor))
-                    self.pan_initial_pos = ev.pos()
+                    self.pan_initial_pos = event_pos
 
         elif ev.button() == Qt.RightButton and self.editing():
+            self.right_pan_initial_pos = event_pos
+            self.right_panning = False
             self.select_shape_point(pos)
             self.prev_point = pos
         self.update()
 
     def mouseReleaseEvent(self, ev):
         if ev.button() == Qt.RightButton:
+            if self.right_panning:
+                self.right_panning = False
+                self.selected_shape_copy = None
+                self.restore_cursor()
+                self.update()
+                return
             menu = self.menus[bool(self.selected_shape_copy)]
             self.restore_cursor()
-            if not menu.exec(self.mapToGlobal(ev.pos()))\
+            if not menu.exec(self.mapToGlobal(self.event_pos(ev)))\
                and self.selected_shape_copy:
                 # Cancel the move by deleting the shadow copy.
                 self.selected_shape_copy = None
@@ -285,7 +309,7 @@ class Canvas(QWidget):
             else:
                 self.override_cursor(CURSOR_GRAB)
         elif ev.button() == Qt.LeftButton:
-            pos = self.transform_pos(ev.pos())
+            pos = self.transform_pos(self.event_pos(ev))
             if self.drawing():
                 self.handle_drawing(pos)
             else:
@@ -613,7 +637,9 @@ class Canvas(QWidget):
 
     def keyPressEvent(self, ev):
         key = ev.key()
-        if key == Qt.Key_Escape and self.current:
+        if ev.modifiers() == Qt.NoModifier and self.parent().window().handle_shape_shortcut_key(key):
+            ev.accept()
+        elif key == Qt.Key_Escape and self.current:
             print('ESC press')
             self.current = None
             self.drawingPolygon.emit(False)

@@ -18,6 +18,36 @@ LANGUAGES = {
 }
 
 
+def normalize_language(locale_str):
+    if not locale_str:
+        return 'en'
+
+    normalized = str(locale_str).split('.', 1)[0].split('@', 1)[0].replace('_', '-')
+    normalized_lower = normalized.lower()
+    for lang_code in LANGUAGES:
+        if normalized_lower == lang_code.lower():
+            return lang_code
+
+    language = normalized_lower.split('-', 1)[0]
+    if language == 'zh':
+        return 'zh-TW' if normalized_lower in ('zh-tw', 'zh-hk', 'zh-mo', 'zh-hant') else 'zh-CN'
+    if language == 'ja':
+        return 'ja-JP'
+    if language == 'en':
+        return 'en'
+    return 'en'
+
+
+def get_system_language():
+    try:
+        default_locale = locale.getlocale()
+        locale_str = default_locale[0] if default_locale and default_locale[0] else os.getenv('LANG')
+    except:
+        print('Invalid locale')
+        locale_str = None
+    return normalize_language(locale_str)
+
+
 class StringBundle:
 
     __create_key = object()
@@ -32,12 +62,9 @@ class StringBundle:
     @classmethod
     def get_bundle(cls, locale_str=None):
         if locale_str is None:
-            try:
-                default_locale = locale.getlocale()
-                locale_str = default_locale[0] if default_locale and default_locale[0] else os.getenv('LANG')
-            except:
-                print('Invalid locale')
-                locale_str = 'en'
+            locale_str = get_system_language()
+        else:
+            locale_str = normalize_language(locale_str)
 
         return StringBundle(cls.__create_key, locale_str)
 
