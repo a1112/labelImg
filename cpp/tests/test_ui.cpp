@@ -20,6 +20,7 @@ private slots:
     void canvasScaleClampSamplingAndOverview();
     void mainWindowLanguageActionRefreshesTexts();
     void mainWindowUsesFramelessChrome();
+    void mainWindowUsesGeneratedCppIcon();
     void mainWindowEmbedsToolbarIntoFramelessTitleBar();
     void mainWindowTitleToolbarUsesIconOnlyButtons();
     void mainWindowShowsPerformanceAndMiniMapControls();
@@ -271,6 +272,12 @@ void UiTests::mainWindowUsesFramelessChrome() {
     QVERIFY(window.findChild<QToolButton *>("maximizeButton"));
     QVERIFY(window.findChild<QToolButton *>("closeButton"));
     QVERIFY(window.menuWidget());
+}
+
+void UiTests::mainWindowUsesGeneratedCppIcon() {
+    resetTestSettings("generated-cpp-icon");
+    MainWindow window;
+    QVERIFY(!window.windowIcon().isNull());
 }
 
 void UiTests::mainWindowEmbedsToolbarIntoFramelessTitleBar() {

@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(labelImgCpp VERSION 0.1.0 LANGUAGES CXX)
+if(WIN32)
+    enable_language(RC)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +36,12 @@ target_compile_definitions(labelImgCppCore PUBLIC
     LABELIMG_REPO_ROOT="${CMAKE_CURRENT_LIST_DIR}/.."
 )
 
+set(APP_ICON_RC)
+if(WIN32)
+    set(APP_ICON_RC "${CMAKE_CURRENT_BINARY_DIR}/labelImgCpp_icon.rc")
+    file(WRITE "${APP_ICON_RC}" "IDI_ICON1 ICON \"${CMAKE_CURRENT_LIST_DIR}/../resources/icons/app-cpp.ico\"\n")
+endif()
+
 add_executable(labelImgCpp
     src/main.cpp
     src/ui/Canvas.cpp
@@ -43,6 +52,7 @@ add_executable(labelImgCpp
     src/ui/MiniMapOverlay.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
+    ${APP_ICON_RC}
 )
 target_link_libraries(labelImgCpp PRIVATE labelImgCppCore Qt6::Widgets)
 

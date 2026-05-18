@@ -128,6 +128,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
     setAttribute(Qt::WA_TranslucentBackground, false);
+    setWindowIcon(QIcon(ResourcePaths::filePath(QStringLiteral("resources/icons/app-cpp.png"))));
     loadSettings();
     loadPredefinedClasses();
     createUi();
