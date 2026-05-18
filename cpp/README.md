@@ -26,7 +26,15 @@ Deploy manually when needed:
 windeployqt cpp\build\Release\labelImgCpp.exe
 ```
 
-The C++ app reuses resources from the repository root:
+Build the Windows deployment directory, portable zip, and per-user installer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File cpp\packaging\build_windows_installer.ps1
+```
+
+The installer writes to `%LOCALAPPDATA%\Programs\labelImgCpp` and creates Start Menu/Desktop shortcuts, so it does not require administrator rights.
+
+The C++ app loads resources from the installed application directory first, then falls back to the repository root during development:
 
 - `resources/icons`
 - `resources/strings`

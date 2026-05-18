@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include "core/ResourcePaths.h"
+
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QColor>
@@ -35,16 +37,8 @@
 #endif
 
 namespace {
-QString repoRoot() {
-#ifdef LABELIMG_REPO_ROOT
-    return QString::fromUtf8(LABELIMG_REPO_ROOT);
-#else
-    return QDir::currentPath();
-#endif
-}
-
 QIcon resourceIcon(const QString &fileName) {
-    return QIcon(QDir(repoRoot()).filePath(QStringLiteral("resources/icons/") + fileName));
+    return QIcon(ResourcePaths::filePath(QStringLiteral("resources/icons/") + fileName));
 }
 
 QColor colorForLabel(const QString &label) {
@@ -581,7 +575,7 @@ void MainWindow::saveSettings() {
 }
 
 void MainWindow::loadPredefinedClasses() {
-    loadPredefinedClassesFromFile(QDir(repoRoot()).filePath("data/predefined_classes.txt"));
+    loadPredefinedClassesFromFile(ResourcePaths::filePath(QStringLiteral("data/predefined_classes.txt")));
     mergePersistedLabelHistory();
 }
 

@@ -1,4 +1,5 @@
 #include "core/StringBundle.h"
+#include "core/ResourcePaths.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -7,16 +8,6 @@
 #include <QRegularExpression>
 #include <QStringConverter>
 #include <QTextStream>
-
-namespace {
-QString repoRoot() {
-#ifdef LABELIMG_REPO_ROOT
-    return QString::fromUtf8(LABELIMG_REPO_ROOT);
-#else
-    return QDir::currentPath();
-#endif
-}
-}
 
 StringBundle::StringBundle(const QString &language) {
     load(language.isEmpty() ? systemLanguage() : normalizeLanguage(language));
@@ -56,7 +47,7 @@ QString StringBundle::get(const QString &key) const {
 
 void StringBundle::load(const QString &language) {
     m_language = normalizeLanguage(language);
-    const QString dir = QDir(repoRoot()).filePath("resources/strings");
+    const QString dir = ResourcePaths::filePath(QStringLiteral("resources/strings"));
     loadFile(QDir(dir).filePath("strings.properties"));
     if (m_language != "en") {
         loadFile(QDir(dir).filePath(QString("strings-%1.properties").arg(m_language)));

@@ -4,6 +4,7 @@
 #include "core/AnnotationIO.h"
 #include "core/LabelListModel.h"
 #include "core/PerformanceMonitor.h"
+#include "core/ResourcePaths.h"
 #include "core/StringBundle.h"
 
 class CoreTests : public QObject {
@@ -17,6 +18,7 @@ private slots:
     void labelNavigationSelectsTopWhenEmptyAndWraps();
     void shapeSupportsVertexEditingAndCopy();
     void performanceMonitorReturnsCpuAndMemoryText();
+    void resourcePathsFindSharedAssets();
 };
 
 void CoreTests::stringBundleNormalizesLocales() {
@@ -140,6 +142,11 @@ void CoreTests::performanceMonitorReturnsCpuAndMemoryText() {
     QVERIFY(text.contains("CPU"));
     QVERIFY(text.contains("MEM"));
     QVERIFY(!text.isEmpty());
+}
+
+void CoreTests::resourcePathsFindSharedAssets() {
+    QVERIFY(QFileInfo::exists(ResourcePaths::filePath(QStringLiteral("resources/strings/strings.properties"))));
+    QVERIFY(QFileInfo::exists(ResourcePaths::filePath(QStringLiteral("data/predefined_classes.txt"))));
 }
 
 QTEST_MAIN(CoreTests)

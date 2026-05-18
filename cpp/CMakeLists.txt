@@ -15,6 +15,8 @@ set(CORE_SOURCES
     src/core/LabelListModel.h
     src/core/PerformanceMonitor.cpp
     src/core/PerformanceMonitor.h
+    src/core/ResourcePaths.cpp
+    src/core/ResourcePaths.h
     src/core/Shape.cpp
     src/core/Shape.h
     src/core/StringBundle.cpp
