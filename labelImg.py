@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import argparse
 import codecs
+import errno
+from html import escape
 import os.path
 import platform
 import shutil
@@ -816,6 +818,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
     # Tzutalin 20160906 : Add file list and dock to move faster
     def file_item_double_clicked(self, item=None):
+        if not self.may_continue():
+            return
         self.cur_img_idx = self.m_img_list.index(ustr(item.text()))
         filename = self.m_img_list[self.cur_img_idx]
         if filename:
@@ -988,6 +992,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def save_labels(self, annotation_file_path):
         annotation_file_path = ustr(annotation_file_path)
+        previous_label_file = self.label_file
         if self.label_file is None:
             self.label_file = LabelFile()
             self.label_file.verified = self.canvas.verified
@@ -1023,8 +1028,23 @@ class MainWindow(QMainWindow, WindowMixin):
                                      self.line_color.getRgb(), self.fill_color.getRgb())
             print('Image:{0} -> Annotation:{1}'.format(self.file_path, annotation_file_path))
             return True
-        except LabelFileError as e:
-            self.error_message(u'Error saving label data', u'<b>%s</b>' % e)
+        except (LabelFileError, OSError) as e:
+            self.label_file = previous_label_file
+            if isinstance(e, OSError) and e.errno in (errno.EACCES, errno.EPERM):
+                reason = 'Access to the selected file or folder was denied.'
+                recovery = 'Choose File > Save As and select a writable folder, or check folder access and retry Save.'
+                if sys.platform == 'darwin':
+                    recovery += (' If this app is listed in System Settings > Privacy & Security > '
+                                 'Files and Folders, you can allow access to that folder and retry.')
+            elif isinstance(e, OSError) and e.errno == errno.ENOENT:
+                reason = 'The selected file or folder could not be found.'
+                recovery = 'Choose File > Save As and select an existing folder, then retry.'
+            else:
+                reason = 'The annotation could not be saved.'
+                recovery = 'Check the file, available disk space and folder access, then retry Save or use File > Save As.'
+            self.error_message('Error saving label data',
+                               '%s<br>%s<br>Your unsaved changes are still open.<br><br>%s' %
+                               (reason, recovery, escape(str(e))))
             return False
 
     def copy_selected_shape(self):
@@ -1352,6 +1372,7 @@ class MainWindow(QMainWindow, WindowMixin):
     def closeEvent(self, event):
         if not self.may_continue():
             event.ignore()
+            return
         settings = self.settings
         # If it loads images from dir, don't load it at the beginning
         if self.dir_name is None:
@@ -1574,23 +1595,25 @@ class MainWindow(QMainWindow, WindowMixin):
             self.load_file(filename)
 
     def save_file(self, _value=False):
+        if not self.file_path:
+            return False
         if self.default_save_dir is not None and len(ustr(self.default_save_dir)):
             if self.file_path:
                 image_file_name = os.path.basename(self.file_path)
                 saved_file_name = os.path.splitext(image_file_name)[0]
                 saved_path = os.path.join(ustr(self.default_save_dir), saved_file_name)
-                self._save_file(saved_path)
+                return self._save_file(saved_path)
         else:
             image_file_dir = os.path.dirname(self.file_path)
             image_file_name = os.path.basename(self.file_path)
             saved_file_name = os.path.splitext(image_file_name)[0]
             saved_path = os.path.join(image_file_dir, saved_file_name)
-            self._save_file(saved_path if self.label_file
+            return self._save_file(saved_path if self.label_file
                             else self.save_file_dialog(remove_ext=False))
 
     def save_file_as(self, _value=False):
         assert not self.image.isNull(), "cannot save empty image"
-        self._save_file(self.save_file_dialog())
+        return self._save_file(self.save_file_dialog())
 
     def save_file_dialog(self, remove_ext=True):
         caption = '%s - Choose File' % __appname__
@@ -1615,6 +1638,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.set_clean()
             self.statusBar().showMessage('Saved to  %s' % annotation_file_path)
             self.statusBar().show()
+            return True
+        return False
 
     def close_file(self, _value=False):
         if not self.may_continue():
@@ -1653,8 +1678,7 @@ class MainWindow(QMainWindow, WindowMixin):
             if discard_changes == QMessageBox.No:
                 return True
             elif discard_changes == QMessageBox.Yes:
-                self.save_file()
-                return True
+                return self.save_file()
             else:
                 return False
 
